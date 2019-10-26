@@ -91,7 +91,7 @@ impl<E: Engine> Endpoint<E> {
         mut req: coppb::Request,
         peer: Option<String>,
         is_streaming: bool,
-    ) -> Result<(RequestHandlerBuilder<E::Snap>, ReqContext)> {
+    ) -> Result<(RequestHandlerBuilder<Option<E::Snap>>, ReqContext)> {
         fail_point!("coprocessor_parse_request", |_| Err(box_err!(
             "unsupported tp (failpoint)"
         )));
@@ -106,7 +106,7 @@ impl<E: Engine> Endpoint<E> {
         is.set_recursion_limit(self.recursion_limit);
 
         let req_ctx: ReqContext;
-        let builder: RequestHandlerBuilder<E::Snap>;
+        let builder: RequestHandlerBuilder<Option<E::Snap>>;
 
         match req.get_tp() {
             REQ_TYPE_DAG => {
@@ -115,12 +115,14 @@ impl<E: Engine> Endpoint<E> {
                 let mut table_scan = false;
                 let mut is_desc_scan = false;
                 if let Some(scan) = dag.get_executors().iter().next() {
+                    let mem_scan = scan.get_tp() == ExecType::TypeMemTableScan;
                     table_scan = scan.get_tp() == ExecType::TypeTableScan;
                     if table_scan {
                         is_desc_scan = scan.get_tbl_scan().get_desc();
                     } else {
                         is_desc_scan = scan.get_idx_scan().get_desc();
                     }
+                    table_scan |= mem_scan;
                 }
                 req_ctx = ReqContext::new(
                     make_tag(table_scan),
@@ -135,12 +137,16 @@ impl<E: Engine> Endpoint<E> {
                 let enable_batch_if_possible = self.enable_batch_if_possible;
                 builder = Box::new(move |snap, req_ctx: &ReqContext| {
                     // TODO: Remove explicit type once rust-lang#41078 is resolved
-                    let store = SnapshotStore::new(
-                        snap,
-                        dag.get_start_ts(),
-                        req_ctx.context.get_isolation_level(),
-                        !req_ctx.context.get_not_fill_cache(),
-                    );
+                    let store = if let Some(snap) = snap {
+                        Some(SnapshotStore::new(
+                            snap,
+                            dag.get_start_ts(),
+                            req_ctx.context.get_isolation_level(),
+                            !req_ctx.context.get_not_fill_cache(),
+                        ))
+                    } else {
+                        None
+                    };
                     dag::build_handler(
                         dag,
                         ranges,
@@ -167,8 +173,13 @@ impl<E: Engine> Endpoint<E> {
                 );
                 builder = Box::new(move |snap, req_ctx: &_| {
                     // TODO: Remove explicit type once rust-lang#41078 is resolved
-                    statistics::analyze::AnalyzeContext::new(analyze, ranges, snap, req_ctx)
-                        .map(|h| h.into_boxed())
+                    statistics::analyze::AnalyzeContext::new(
+                        analyze,
+                        ranges,
+                        snap.unwrap(),
+                        req_ctx,
+                    )
+                    .map(|h| h.into_boxed())
                 });
             }
             REQ_TYPE_CHECKSUM => {
@@ -186,7 +197,7 @@ impl<E: Engine> Endpoint<E> {
                 );
                 builder = Box::new(move |snap, req_ctx: &_| {
                     // TODO: Remove explicit type once rust-lang#41078 is resolved
-                    checksum::ChecksumContext::new(checksum, ranges, snap, req_ctx)
+                    checksum::ChecksumContext::new(checksum, ranges, snap.unwrap(), req_ctx)
                         .map(|h| h.into_boxed())
                 });
             }
@@ -227,7 +238,7 @@ impl<E: Engine> Endpoint<E> {
     // TODO: Convert to use async / await.
     fn handle_unary_request_impl(
         tracker: Box<Tracker>,
-        handler_builder: RequestHandlerBuilder<E::Snap>,
+        handler_builder: RequestHandlerBuilder<Option<E::Snap>>,
     ) -> impl Future<Item = coppb::Response, Error = Error> {
         // When this function is being executed, it may be queued for a long time, so that
         // deadline may exceed.
@@ -237,8 +248,17 @@ impl<E: Engine> Endpoint<E> {
             .and_then(move |_| unsafe {
                 with_tls_engine(|engine| {
                     Self::async_snapshot(engine, &tracker.req_ctx.context)
+                        .map(|snapshot| Some(snapshot))
+                        .or_else(|_| Ok(None))
                         .map(|snapshot| (tracker, snapshot))
                 })
+            })
+            .and_then(move |(tracker, snapshot)| {
+                if tracker.req_ctx.context.get_region_id() != 0 && snapshot.is_none() {
+                    Err(Error::Other("Error".to_string()))
+                } else {
+                    Ok((tracker, snapshot))
+                }
             })
             .and_then(move |(tracker, snapshot)| {
                 // When snapshot is retrieved, deadline may exceed.
@@ -282,7 +302,7 @@ impl<E: Engine> Endpoint<E> {
     fn handle_unary_request(
         &self,
         req_ctx: ReqContext,
-        handler_builder: RequestHandlerBuilder<E::Snap>,
+        handler_builder: RequestHandlerBuilder<Option<E::Snap>>,
     ) -> Result<impl Future<Item = coppb::Response, Error = Error>> {
         let read_pool = self.get_read_pool(req_ctx.context.get_priority());
         // box the tracker so that moving it is cheap.
@@ -321,7 +341,7 @@ impl<E: Engine> Endpoint<E> {
     // TODO: Convert to use async / await.
     fn handle_stream_request_impl(
         tracker: Box<Tracker>,
-        handler_builder: RequestHandlerBuilder<E::Snap>,
+        handler_builder: RequestHandlerBuilder<Option<E::Snap>>,
     ) -> impl Stream<Item = coppb::Response, Error = Error> {
         // When this function is being executed, it may be queued for a long time, so that
         // deadline may exceed.
@@ -334,8 +354,17 @@ impl<E: Engine> Endpoint<E> {
                     unsafe {
                         with_tls_engine(|engine| {
                             Self::async_snapshot(engine, &tracker.req_ctx.context)
+                                .map(|snapshot| Some(snapshot))
+                                .or_else(|_| Ok(None))
                                 .map(|snapshot| (tracker, snapshot))
                         })
+                    }
+                })
+                .and_then(move |(tracker, snapshot)| {
+                    if tracker.req_ctx.context.get_region_id() != 0 && snapshot.is_none() {
+                        Err(Error::Other("Error".to_string()))
+                    } else {
+                        Ok((tracker, snapshot))
                     }
                 })
                 .and_then(move |(tracker, snapshot)| {
@@ -417,7 +446,7 @@ impl<E: Engine> Endpoint<E> {
     fn handle_stream_request(
         &self,
         req_ctx: ReqContext,
-        handler_builder: RequestHandlerBuilder<E::Snap>,
+        handler_builder: RequestHandlerBuilder<Option<E::Snap>>,
     ) -> Result<impl Stream<Item = coppb::Response, Error = Error>> {
         let (tx, rx) = mpsc::channel::<Result<coppb::Response>>(self.stream_channel_size);
         let read_pool = self.get_read_pool(req_ctx.context.get_priority());
