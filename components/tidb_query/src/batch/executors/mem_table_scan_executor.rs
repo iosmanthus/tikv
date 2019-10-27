@@ -10,6 +10,7 @@ use super::util::mem_scan_executor::{MemScanExecutor, SysInfoCollector};
 use super::util::scan_executor::{check_columns_info_supported, field_type_from_column_info};
 
 use sysinfo::{NetworkExt, ProcessorExt, SystemExt};
+use rand::prelude::*;
 use tipb::{ColumnInfo, FieldType, MemTableScan};
 
 use std::marker::PhantomData;
@@ -94,6 +95,14 @@ impl<S: Storage> MemScanExecutor for BatchMemTableScanExecutor<S> {
     }
 }
 
+fn gen_ip() -> Vec<u8> {
+    let mut ip = String::from("117");
+    for _ in 0..3 {
+        ip.push_str(&format!(".{}", thread_rng().gen_range(1, 256)));
+    }
+    ip.into_bytes()
+}
+
 struct ServerStatInfo {
     store_id: u64,
 }
@@ -111,7 +120,6 @@ impl SysInfoCollector for ServerStatInfo {
         let mut system = sysinfo::System::new();
         system.refresh_all();
 
-        let ip = machine_ip::get().unwrap().to_string().into_bytes();
         let processor_list = system.get_processor_list();
         let cpu_usage = processor_list
             .iter()
@@ -122,7 +130,7 @@ impl SysInfoCollector for ServerStatInfo {
         let node_id = format!("tikv{}", self.store_id).into_bytes();
 
         vec![
-            Datum::Bytes(ip),
+            Datum::Bytes(gen_ip()),
             Datum::F64(cpu_usage),
             Datum::U64(used_memory),
             Datum::Bytes(node_id),
@@ -147,13 +155,12 @@ impl SysInfoCollector for ServerNetInfo {
         let mut system = sysinfo::System::new();
         system.refresh_all();
 
-        let ip = machine_ip::get().unwrap().to_string().into_bytes();
         let bytes_in = system.get_network().get_income();
         let bytes_out = system.get_network().get_outcome();
         let node_id = format!("tikv{}", self.store_id).into_bytes();
 
         vec![
-            Datum::Bytes(ip),
+            Datum::Bytes(gen_ip()),
             Datum::Bytes(b"eth0".to_vec()),
             Datum::U64(bytes_out),
             Datum::U64(bytes_in),
