@@ -33,7 +33,7 @@ pub struct BatchExecutorsRunner<SS> {
     // TODO: Deprecate it using a better deadline mechanism.
     deadline: Deadline,
 
-    out_most_executor: Box<dyn BatchExecutor<StorageStats = SS>>,
+    out_most_executor: Box<dyn BatchExecutor<StorageStats=SS>>,
 
     /// The offset of the columns need to be outputted. For example, TiDB may only needs a subset
     /// of the columns in the result so that unrelated columns don't need to be encoded and
@@ -82,12 +82,12 @@ impl BatchExecutorsRunner<()> {
                         .map_err(|e| other_err!("BatchSelectionExecutor: {}", e))?;
                 }
                 ExecType::TypeAggregation | ExecType::TypeStreamAgg
-                    if ed.get_aggregation().get_group_by().is_empty() =>
-                {
-                    let descriptor = ed.get_aggregation();
-                    BatchSimpleAggregationExecutor::check_supported(&descriptor)
-                        .map_err(|e| other_err!("BatchSimpleAggregationExecutor: {}", e))?;
-                }
+                if ed.get_aggregation().get_group_by().is_empty() =>
+                    {
+                        let descriptor = ed.get_aggregation();
+                        BatchSimpleAggregationExecutor::check_supported(&descriptor)
+                            .map_err(|e| other_err!("BatchSimpleAggregationExecutor: {}", e))?;
+                    }
                 ExecType::TypeAggregation => {
                     let descriptor = ed.get_aggregation();
                     if BatchFastHashAggregationExecutor::check_supported(&descriptor).is_err() {
@@ -120,13 +120,13 @@ pub fn build_executors<S: Storage + 'static, C: ExecSummaryCollector + 'static>(
     storage: Option<S>,
     ranges: Vec<KeyRange>,
     config: Arc<EvalConfig>,
-) -> Result<Box<dyn BatchExecutor<StorageStats = S::Statistics>>> {
+) -> Result<Box<dyn BatchExecutor<StorageStats=S::Statistics>>> {
     let mut executor_descriptors = executor_descriptors.into_iter();
     let mut first_ed = executor_descriptors
         .next()
         .ok_or_else(|| other_err!("No executors"))?;
 
-    let mut executor: Box<dyn BatchExecutor<StorageStats = S::Statistics>>;
+    let mut executor: Box<dyn BatchExecutor<StorageStats=S::Statistics>>;
     let mut summary_slot_index = 0;
 
     match first_ed.get_tp() {
@@ -146,7 +146,7 @@ pub fn build_executors<S: Storage + 'static, C: ExecSummaryCollector + 'static>(
                     ranges,
                     descriptor.get_desc(),
                 )?
-                .with_summary_collector(C::new(summary_slot_index)),
+                    .with_summary_collector(C::new(summary_slot_index)),
             );
         }
         ExecType::TypeIndexScan => {
@@ -165,7 +165,7 @@ pub fn build_executors<S: Storage + 'static, C: ExecSummaryCollector + 'static>(
                     descriptor.get_desc(),
                     descriptor.get_unique(),
                 )?
-                .with_summary_collector(C::new(summary_slot_index)),
+                    .with_summary_collector(C::new(summary_slot_index)),
             );
         }
         ExecType::TypeMemTableScan => {
@@ -180,8 +180,9 @@ pub fn build_executors<S: Storage + 'static, C: ExecSummaryCollector + 'static>(
                     config.clone(),
                     columns_info,
                     descriptor.get_store_id(),
+                    descriptor.get_table_name().to_owned(),
                 )?
-                .with_summary_collector(C::new(summary_slot_index)),
+                    .with_summary_collector(C::new(summary_slot_index)),
             );
         }
         _ => {
@@ -195,7 +196,7 @@ pub fn build_executors<S: Storage + 'static, C: ExecSummaryCollector + 'static>(
     for mut ed in executor_descriptors {
         summary_slot_index += 1;
 
-        let new_executor: Box<dyn BatchExecutor<StorageStats = S::Statistics>> = match ed.get_tp() {
+        let new_executor: Box<dyn BatchExecutor<StorageStats=S::Statistics>> = match ed.get_tp() {
             ExecType::TypeSelection => {
                 COPR_EXECUTOR_COUNT
                     .with_label_values(&["batch_selection"])
@@ -207,25 +208,25 @@ pub fn build_executors<S: Storage + 'static, C: ExecSummaryCollector + 'static>(
                         executor,
                         ed.take_selection().take_conditions().into(),
                     )?
-                    .with_summary_collector(C::new(summary_slot_index)),
+                        .with_summary_collector(C::new(summary_slot_index)),
                 )
             }
             ExecType::TypeAggregation | ExecType::TypeStreamAgg
-                if ed.get_aggregation().get_group_by().is_empty() =>
-            {
-                COPR_EXECUTOR_COUNT
-                    .with_label_values(&["batch_simple_aggr"])
-                    .inc();
+            if ed.get_aggregation().get_group_by().is_empty() =>
+                {
+                    COPR_EXECUTOR_COUNT
+                        .with_label_values(&["batch_simple_aggr"])
+                        .inc();
 
-                Box::new(
-                    BatchSimpleAggregationExecutor::new(
-                        config.clone(),
-                        executor,
-                        ed.mut_aggregation().take_agg_func().into(),
-                    )?
-                    .with_summary_collector(C::new(summary_slot_index)),
-                )
-            }
+                    Box::new(
+                        BatchSimpleAggregationExecutor::new(
+                            config.clone(),
+                            executor,
+                            ed.mut_aggregation().take_agg_func().into(),
+                        )?
+                            .with_summary_collector(C::new(summary_slot_index)),
+                    )
+                }
             ExecType::TypeAggregation => {
                 if BatchFastHashAggregationExecutor::check_supported(&ed.get_aggregation()).is_ok()
                 {
@@ -240,7 +241,7 @@ pub fn build_executors<S: Storage + 'static, C: ExecSummaryCollector + 'static>(
                             ed.mut_aggregation().take_group_by().into(),
                             ed.mut_aggregation().take_agg_func().into(),
                         )?
-                        .with_summary_collector(C::new(summary_slot_index)),
+                            .with_summary_collector(C::new(summary_slot_index)),
                     )
                 } else {
                     COPR_EXECUTOR_COUNT
@@ -254,7 +255,7 @@ pub fn build_executors<S: Storage + 'static, C: ExecSummaryCollector + 'static>(
                             ed.mut_aggregation().take_group_by().into(),
                             ed.mut_aggregation().take_agg_func().into(),
                         )?
-                        .with_summary_collector(C::new(summary_slot_index)),
+                            .with_summary_collector(C::new(summary_slot_index)),
                     )
                 }
             }
@@ -270,7 +271,7 @@ pub fn build_executors<S: Storage + 'static, C: ExecSummaryCollector + 'static>(
                         ed.mut_aggregation().take_group_by().into(),
                         ed.mut_aggregation().take_agg_func().into(),
                     )?
-                    .with_summary_collector(C::new(summary_slot_index)),
+                        .with_summary_collector(C::new(summary_slot_index)),
                 )
             }
             ExecType::TypeLimit => {
@@ -305,7 +306,7 @@ pub fn build_executors<S: Storage + 'static, C: ExecSummaryCollector + 'static>(
                         order_is_desc,
                         d.get_limit() as usize,
                     )?
-                    .with_summary_collector(C::new(summary_slot_index)),
+                        .with_summary_collector(C::new(summary_slot_index)),
                 )
             }
             _ => {
@@ -322,7 +323,7 @@ pub fn build_executors<S: Storage + 'static, C: ExecSummaryCollector + 'static>(
 }
 
 impl<SS: 'static> BatchExecutorsRunner<SS> {
-    pub fn from_request<S: Storage<Statistics = SS> + 'static>(
+    pub fn from_request<S: Storage<Statistics=SS> + 'static>(
         mut req: DagRequest,
         ranges: Vec<KeyRange>,
         storage: Option<S>,
