@@ -1484,6 +1484,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "machine-ip"
+version = "0.2.1"
+source = "git+https://github.com/iosmanthus/machine-ip?branch=tikv#5c25615af0e4b5e482d77ef95eb4c4294e0e92b9"
+
+[[package]]
 name = "match_template"
 version = "0.0.1"
 dependencies = [
@@ -3025,6 +3030,7 @@ dependencies = [
  "indexmap",
  "kvproto",
  "lazy_static",
+ "machine-ip",
  "match_template",
  "nom 5.0.1",
  "num",
