@@ -120,14 +120,12 @@ impl SysInfoCollector for ServerStatInfo {
             .map(|processor| f64::from(processor.get_cpu_usage()))
             .sum::<f64>()
             / (processor_list.len() as f64);
-        let total_memory = system.get_total_memory();
         let used_memory = system.get_used_memory();
         let node_id = format!("tikv{}", self.store_id).into_bytes();
 
         let datums = vec![
             Datum::Bytes(ip),
             Datum::F64(cpu_usage),
-            Datum::U64(total_memory),
             Datum::U64(used_memory),
             Datum::Bytes(node_id),
         ];
