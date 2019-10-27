@@ -108,6 +108,7 @@ impl BatchExecutorsRunner<()> {
                     BatchTopNExecutor::check_supported(&descriptor)
                         .map_err(|e| other_err!("BatchTopNExecutor: {}", e))?;
                 }
+                _ => return Err(other_err!("Unknown executor"))
             }
         }
 
@@ -445,6 +446,7 @@ impl<SS: 'static> BatchExecutorsRunner<SS> {
                         }
                     }
                     chunks.push(chunk);
+                    warn!("Collected");
                 }
             }
 
@@ -486,6 +488,7 @@ impl<SS: 'static> BatchExecutorsRunner<SS> {
 
                 // In case of this function is called multiple times.
                 self.exec_stats.clear();
+                warn!("Finish");
 
                 return Ok(sel_resp);
             }

@@ -3261,7 +3261,7 @@ dependencies = [
 [[package]]
 name = "tipb"
 version = "0.0.1"
-source = "git+https://github.com/iosmanthus/tipb.git?branch=mem-table-scan#4c1f12889f69fcc2da013f6a9471204569cae4e6"
+source = "git+https://github.com/crazycs520/tipb.git?branch=hackathon-exe#afcb143329dfa14499b99e00acc0853269a88d67"
 dependencies = [
  "protobuf 2.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "protobuf-build",

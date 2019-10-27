@@ -13,5 +13,5 @@ pub trait MemScanExecutor {
 }
 
 pub trait SysInfoCollector {
-    fn collect(&self) -> Result<Vec<Vec<Datum>>>;
+    fn collect(&self) -> Vec<Datum>;
 }

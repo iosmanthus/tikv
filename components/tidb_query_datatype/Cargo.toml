@@ -6,7 +6,7 @@ publish = false
 description = "TiKV query engine data types"
 
 [dependencies]
-tipb = { git = "https://github.com/iosmanthus/tipb.git",  branch = "mem-table-scan" }
+tipb = { git = "https://github.com/crazycs520/tipb.git",  branch = "hackathon-exe" }
 bitflags = "1.0"
 num-traits = "0.2"
 failure = "0.1"

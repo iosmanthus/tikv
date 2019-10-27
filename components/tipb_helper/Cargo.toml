@@ -5,6 +5,6 @@ edition = "2018"
 publish = false
 
 [dependencies]
-tipb = { git = "https://github.com/iosmanthus/tipb.git",  branch = "mem-table-scan" }
+tipb = { git = "https://github.com/crazycs520/tipb.git",  branch = "hackathon-exe" }
 codec = { path = "../codec" }
 tidb_query_datatype = { path = "../tidb_query_datatype" }

@@ -72,23 +72,22 @@ impl<S: Storage> MemScanExecutor for BatchMemTableScanExecutor<S> {
     fn process_row(&mut self, columns: &mut LazyBatchColumnVec) -> Result<()> {
 
         // TODO: Fill the table with push down schema.
-        let datums = match self.table_name.as_str() {
-            "TIKV_SERVER_STATS_INFO_CLUSTER" => ServerStatInfo::new(self.store_id).collect()?,
-            "TIKV_SERVER_NET_STATS_INFO_CLUSTER" => ServerNetInfo::new(self.store_id).collect()?,
+        warn!("{}", self.table_name);
+        let datums = match self.table_name.to_uppercase().as_str() {
+            "TIKV_SERVER_STATS_INFO_CLUSTER" => ServerStatInfo::new(self.store_id).collect(),
+            "TIKV_SERVER_NET_STATS_INFO_CLUSTER" => ServerNetInfo::new(self.store_id).collect(),
             _ => return Err(box_err!("memory table `{}` is not supported yet.", self.table_name)),
         };
 
-        for datum in datums {
-            let mut value = Vec::new();
-            value.write_datum(&datum, false)?;
-            let mut remaining = &value[..];
-            let mut index = 0;
-            while !remaining.is_empty() {
-                let (val, rest) = datum::split_datum(remaining, false)?;
-                columns[index].mut_raw().push(val);
-                remaining = rest;
-                index += 1;
-            }
+        let mut value = Vec::new();
+        value.write_datum(&datums, false)?;
+        let mut remaining = &value[..];
+        let mut index = 0;
+        while !remaining.is_empty() {
+            let (val, rest) = datum::split_datum(remaining, false)?;
+            columns[index].mut_raw().push(val);
+            remaining = rest;
+            index += 1;
         }
 
         Ok(())
@@ -108,7 +107,7 @@ impl ServerStatInfo {
 }
 
 impl SysInfoCollector for ServerStatInfo {
-    fn collect(&self) -> Result<Vec<Vec<Datum>>> {
+    fn collect(&self) -> Vec<Datum> {
         let mut system = sysinfo::System::new();
         system.refresh_all();
 
@@ -122,14 +121,12 @@ impl SysInfoCollector for ServerStatInfo {
         let used_memory = system.get_used_memory();
         let node_id = format!("tikv{}", self.store_id).into_bytes();
 
-        let datums = vec![
+        vec![
             Datum::Bytes(ip),
             Datum::F64(cpu_usage),
             Datum::U64(used_memory),
             Datum::Bytes(node_id),
-        ];
-
-        Ok(vec![datums])
+        ]
     }
 }
 
@@ -146,7 +143,7 @@ impl ServerNetInfo {
 }
 
 impl SysInfoCollector for ServerNetInfo {
-    fn collect(&self) -> Result<Vec<Vec<Datum>>> {
+    fn collect(&self) -> Vec<Datum> {
         let mut system = sysinfo::System::new();
         system.refresh_all();
 
@@ -155,15 +152,13 @@ impl SysInfoCollector for ServerNetInfo {
         let bytes_out = system.get_network().get_outcome();
         let node_id = format!("tikv{}", self.store_id).into_bytes();
 
-        let datums = vec![
+        vec![
             Datum::Bytes(ip),
             Datum::Bytes(b"eth0".to_vec()),
             Datum::U64(bytes_out),
             Datum::U64(bytes_in),
             Datum::Bytes(node_id)
-        ];
-
-        Ok(vec![datums])
+        ]
     }
 }
 
