@@ -77,7 +77,6 @@ impl<S: Storage> MemScanExecutor for BatchMemTableScanExecutor<S> {
             "TIKV_SERVER_NET_STATS_INFO_CLUSTER" => ServerNetInfo::new(self.store_id).collect()?,
             _ => return Err(box_err!("memory table `{}` is not supported yet.", self.table_name)),
         };
-        assert_eq!(columns.columns_len(), datums.len());
 
         for datum in datums {
             let mut value = Vec::new();
@@ -199,4 +198,16 @@ impl<S: Storage> BatchExecutor for BatchMemTableScanExecutor<S> {
     }
 
     fn collect_storage_stats(&mut self, _: &mut Self::StorageStats) {}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storage::fixture::FixtureStorage;
+
+    #[test]
+    fn test_batch_mem_table_scan_executor() {
+        let mut mem_table_scan_executor = BatchMemTableScanExecutor::<FixtureStorage>::new(Arc::new(EvalConfig::default_for_test()), vec![ColumnInfo::default(); 4], 1, "TIKV_SERVER_STATS_INFO_CLUSTER".to_string()).unwrap();
+        assert_eq!(mem_table_scan_executor.next_batch(1).physical_columns.columns_len(), 4);
+    }
 }
