@@ -186,9 +186,7 @@ procinfo = { git = "https://github.com/tikv/procinfo-rs", rev = "5125fc1a69496b7
 [workspace]
 members = [
   "fuzz",
-  "fuzz/fuzzer-afl",
-  "fuzz/fuzzer-libfuzzer",
-  "fuzz/fuzzer-honggfuzz",
+  "fuzz/targets",
   "tests",
   "cmd",
   "components/test_raftstore",
