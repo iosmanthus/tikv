@@ -699,7 +699,7 @@ impl<EK: KvEngine, ER: RaftEngine, T: Transport> RaftPoller<EK, ER, T> {
                 .raft
                 .consume_and_shrink(
                     &mut self.poll_ctx.raft_wb,
-                    true,
+                    false,
                     RAFT_WB_SHRINK_SIZE,
                     4 * 1024,
                 )
